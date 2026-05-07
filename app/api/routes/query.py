@@ -17,7 +17,7 @@ router = APIRouter(prefix="/query", tags=["query"])
     ),
 )
 async def query_documents(
-    request: QueryRequest,
+    payload: QueryRequest,
     settings: SettingsDep,
     qdrant: QdrantDep,
 ) -> QueryResponse:
@@ -26,15 +26,15 @@ async def query_documents(
     # from app.retrieval.retriever import retrieve
     # from app.qa.chain import get_chain
     #
-    # top_k   = request.top_k or settings.retrieval_top_k
-    # chunks  = retrieve(request.question, request.filters, top_k, qdrant, settings)
+    # top_k   = payload.top_k or settings.retrieval_top_k
+    # chunks  = retrieve(payload.question, payload.filters, top_k, qdrant, settings)
     # chain   = get_chain(settings)
-    # result  = chain.invoke({"question": request.question, "chunks": chunks})
+    # result  = chain.invoke({"question": payload.question, "chunks": chunks})
     #
     # return QueryResponse(
     #     answer=result["answer"],
     #     sources=result["sources"],
-    #     question=request.question,
+    #     question=payload.question,
     # )
     # ────────────────────────────────────────────────────────────────────────
 

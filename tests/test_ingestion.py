@@ -140,12 +140,20 @@ def test_extract_text_captures_content():
 
 def test_extract_text_raises_empty_pdf_error():
     """A PDF with zero pages raises EmptyPDFError."""
-    doc = fitz.open()
-    buf = io.BytesIO()
-    doc.save(buf)
-    doc.close()
+    # PyMuPDF refuses to save a zero-page document, so build minimal
+    # PDF bytes by hand: a valid PDF whose /Pages tree has Count 0.
+    zero_page_pdf = (
+        b"%PDF-1.0\n"
+        b"1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj\n"
+        b"2 0 obj<</Type/Pages/Kids[]/Count 0>>endobj\n"
+        b"xref\n0 3\n"
+        b"0000000000 65535 f \n"
+        b"0000000009 00000 n \n"
+        b"0000000058 00000 n \n"
+        b"trailer<</Size 3/Root 1 0 R>>\nstartxref\n109\n%%EOF"
+    )
     with pytest.raises(EmptyPDFError):
-        extract_text(buf.getvalue())
+        extract_text(zero_page_pdf)
 
 
 # ── Chunker tests ─────────────────────────────────────────────────────────────

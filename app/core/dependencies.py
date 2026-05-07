@@ -8,13 +8,13 @@ from app.core.config import Settings, get_settings
 
 
 @lru_cache
-def get_qdrant_client(settings: Settings = get_settings()) -> QdrantClient:
+def get_qdrant_client() -> QdrantClient:
     """Return a cached Qdrant client.
 
     A single client is shared across all requests rather than
     opening a new connection on every call.
     """
-    return QdrantClient(url=settings.qdrant_url)
+    return QdrantClient(url=get_settings().qdrant_url)
 
 
 # Convenience type aliases for use in route signatures

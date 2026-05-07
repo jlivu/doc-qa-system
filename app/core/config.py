@@ -7,12 +7,13 @@ class Settings(BaseSettings):
         env_file=".env",
         env_file_encoding="utf-8",
         case_sensitive=False,
+        extra="ignore",
     )
 
-    # LLM
-    openai_api_key: str
-    llm_model: str = "gpt-4o-mini"
-    embedding_model: str = "text-embedding-3-small"
+    # Ollama
+    ollama_base_url: str = "http://host.docker.internal:11434"
+    ollama_llm_model: str = "qwen2.5:7b"
+    ollama_embedding_model: str = "nomic-embed-text"
 
     # Qdrant
     qdrant_url: str = "http://localhost:6333"
@@ -32,7 +33,7 @@ class Settings(BaseSettings):
 @lru_cache
 def get_settings() -> Settings:
     """Return a cached Settings instance.
-    
+
     Using lru_cache means the .env file is read once per process,
     not on every request.
     """

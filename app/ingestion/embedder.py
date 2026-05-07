@@ -1,7 +1,7 @@
-"""Embedding chunks via the OpenAI embeddings API.
+"""Embedding chunks via Ollama's OpenAI-compatible embeddings API.
 
 embed_chunks() enriches each ChunkDict with a `vector` field. Chunks are
-sent in batches to stay within API rate limits and reduce latency.
+sent in batches to stay within rate limits and reduce latency.
 """
 
 from typing import TypedDict
@@ -13,7 +13,7 @@ from app.core.config import Settings
 from app.ingestion.exceptions import EmbeddingError
 from app.ingestion.chunker import ChunkDict
 
-BATCH_SIZE = 100  # OpenAI allows up to 2048 inputs per request
+BATCH_SIZE = 100
 
 
 class EmbeddedChunk(ChunkDict, total=False):
@@ -36,24 +36,27 @@ def embed_chunks(
 ) -> list[EmbeddedChunk]:
     """Add an embedding vector to every chunk.
 
-    Processes chunks in batches of BATCH_SIZE. The OpenAI client is
-    instantiated here using the API key from settings.
+    Processes chunks in batches of BATCH_SIZE. Uses Ollama's
+    OpenAI-compatible endpoint for embeddings.
 
     Args:
         chunks: Output of chunk_pages().
-        settings: App settings (openai_api_key, embedding_model).
+        settings: App settings (ollama_base_url, ollama_embedding_model).
 
     Returns:
         List of EmbeddedChunk — same as input but with `vector` added.
     """
-    client = OpenAI(api_key=settings.openai_api_key)
+    client = OpenAI(
+        base_url=settings.ollama_base_url + "/v1",
+        api_key="ollama",
+    )
     embedded: list[EmbeddedChunk] = []
 
     for i in range(0, len(chunks), BATCH_SIZE):
         batch = chunks[i : i + BATCH_SIZE]
         texts = [c["text"] for c in batch]
         try:
-            vectors = _embed_batch(texts, client, settings.embedding_model)
+            vectors = _embed_batch(texts, client, settings.ollama_embedding_model)
         except RetryError as exc:
             raise EmbeddingError(
                 f"Embedding API failed after 3 attempts: {exc}"

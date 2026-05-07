@@ -11,7 +11,7 @@ approach (MapReduce, Re-rank + Refine) without changing the route.
 from functools import lru_cache
 
 from langchain_core.messages import HumanMessage, SystemMessage
-from langchain_openai import ChatOpenAI
+from langchain_ollama import ChatOllama
 
 from app.api.schemas import SourceChunk
 from app.core.config import Settings
@@ -29,9 +29,9 @@ def _build_context(chunks: list[SourceChunk]) -> str:
 
 
 @lru_cache
-def _get_llm(model: str, api_key: str) -> ChatOpenAI:
+def _get_llm(model: str, base_url: str) -> ChatOllama:
     """Return a cached LLM instance. Re-creating on every request wastes resources."""
-    return ChatOpenAI(model=model, api_key=api_key, temperature=0)
+    return ChatOllama(model=model, base_url=base_url, temperature=0)
 
 
 def answer(
@@ -44,7 +44,7 @@ def answer(
     Args:
         question: The user's question.
         chunks: Retrieved chunks from the retriever.
-        settings: App settings (llm_model, openai_api_key).
+        settings: App settings (ollama_llm_model, ollama_base_url).
 
     Returns:
         dict with keys 'answer' (str) and 'sources' (list[SourceChunk]).
@@ -56,7 +56,7 @@ def answer(
         }
 
     context = _build_context(chunks)
-    llm = _get_llm(settings.llm_model, settings.openai_api_key)
+    llm = _get_llm(settings.ollama_llm_model, settings.ollama_base_url)
 
     messages = [
         SystemMessage(content=RAG_SYSTEM_PROMPT.format(context=context)),

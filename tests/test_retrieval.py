@@ -1,13 +1,18 @@
-"""Tests for the retrieval layer (Phase 2).
+"""Tests for the retrieval layer (Phase 2) and vector store (Phase 1).
 
 Qdrant calls are mocked so these tests run without a running Qdrant instance.
 """
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 
-from app.retrieval.vector_store import SearchResult, search, upsert_chunks
+from app.retrieval.vector_store import (
+    SearchResult,
+    search,
+    upsert_chunks,
+    delete_by_document_id,
+)
 from app.core.config import Settings
 
 
@@ -30,6 +35,7 @@ def _make_mock_hit(score: float = 0.9) -> MagicMock:
 
 # ── upsert_chunks ─────────────────────────────────────────────────────────────
 
+# AC-STORE-01 — upsert_chunks returns the correct count of stored points
 def test_upsert_returns_chunk_count():
     client = MagicMock()
     client.get_collections.return_value.collections = []
@@ -40,8 +46,10 @@ def test_upsert_returns_chunk_count():
             "chunk_id": "c1",
             "document_id": "d1",
             "filename": "f.pdf",
+            "sha256": "abc123",
             "page_number": 1,
             "text": "hello",
+            "char_count": 5,
             "vector": [0.1] * 1536,
         }
     ]
@@ -49,10 +57,32 @@ def test_upsert_returns_chunk_count():
     assert count == 1
 
 
+# AC-STORE-02 — upsert_chunks returns 0 for an empty input without error
 def test_upsert_empty_list_returns_zero():
     client = MagicMock()
     settings = _make_settings()
     assert upsert_chunks([], client, settings) == 0
+
+
+# ── delete_by_document_id ────────────────────────────────────────────────────
+
+# AC-STORE-03 — After delete_by_document_id, client.delete was called
+def test_delete_by_document_id_removes_points():
+    client = MagicMock()
+    settings = _make_settings()
+
+    delete_by_document_id("doc-1", client, settings)
+
+    client.delete.assert_called_once()
+    call_kwargs = client.delete.call_args.kwargs
+    assert call_kwargs["collection_name"] == settings.qdrant_collection
+
+
+# AC-STORE-04 — delete_by_document_id does not raise for an unknown document_id
+def test_delete_by_document_id_no_error_for_unknown():
+    client = MagicMock()
+    settings = _make_settings()
+    delete_by_document_id("nonexistent-doc", client, settings)  # should not raise
 
 
 # ── search ────────────────────────────────────────────────────────────────────

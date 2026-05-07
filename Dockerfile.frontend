@@ -1,0 +1,18 @@
+FROM python:3.11-slim
+
+RUN addgroup --system appgroup && adduser --system --ingroup appgroup appuser
+
+WORKDIR /app
+
+COPY requirements.txt .
+RUN pip install --upgrade pip \
+    && pip install --no-cache-dir streamlit requests python-dotenv
+
+COPY frontend/ ./frontend/
+
+RUN chown -R appuser:appgroup /app
+USER appuser
+
+EXPOSE 8501
+
+CMD ["streamlit", "run", "frontend/app.py", "--server.address=0.0.0.0", "--server.port=8501"]

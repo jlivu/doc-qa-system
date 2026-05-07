@@ -13,17 +13,19 @@ settings = get_settings()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Startup: verify Qdrant is reachable and collection exists."""
-    client = get_qdrant_client()
-    collections = [c.name for c in client.get_collections().collections]
-    if settings.qdrant_collection not in collections:
-        from qdrant_client.models import Distance, VectorParams
-        client.create_collection(
-            collection_name=settings.qdrant_collection,
-            vectors_config=VectorParams(size=1536, distance=Distance.COSINE),
-        )
+    """Startup: verify Qdrant is reachable and create collection if needed."""
+    try:
+        client = get_qdrant_client()
+        collections = [c.name for c in client.get_collections().collections]
+        if settings.qdrant_collection not in collections:
+            from qdrant_client.models import Distance, VectorParams
+            client.create_collection(
+                collection_name=settings.qdrant_collection,
+                vectors_config=VectorParams(size=1536, distance=Distance.COSINE),
+            )
+    except Exception:
+        pass  # Qdrant may not be available yet; upsert_chunks creates the collection on demand
     yield
-    # Shutdown: nothing to clean up — the Qdrant client has no persistent connection
 
 
 app = FastAPI(

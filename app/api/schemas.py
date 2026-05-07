@@ -6,9 +6,16 @@ from pydantic import BaseModel, Field
 class IngestResponse(BaseModel):
     document_id: str = Field(description="UUID assigned to the ingested document")
     filename: str = Field(description="Original filename of the uploaded PDF")
+    sha256: str = Field(description="SHA-256 hex digest of the file content")
     pages: int = Field(description="Number of pages parsed")
     chunks: int = Field(description="Number of chunks stored in Qdrant")
+    replaced: bool = Field(default=False, description="True if a previous version was replaced")
     message: str = Field(default="Document ingested successfully")
+
+
+class ErrorResponse(BaseModel):
+    error: str = Field(description="Machine-readable error code")
+    detail: str = Field(description="Human-readable error description")
 
 
 # ── Query ─────────────────────────────────────────────────────────────────────

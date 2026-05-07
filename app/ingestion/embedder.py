@@ -7,9 +7,10 @@ sent in batches to stay within API rate limits and reduce latency.
 from typing import TypedDict
 
 from openai import OpenAI
-from tenacity import retry, stop_after_attempt, wait_exponential
+from tenacity import retry, stop_after_attempt, wait_exponential, RetryError
 
 from app.core.config import Settings
+from app.ingestion.exceptions import EmbeddingError
 from app.ingestion.chunker import ChunkDict
 
 BATCH_SIZE = 100  # OpenAI allows up to 2048 inputs per request
@@ -51,7 +52,12 @@ def embed_chunks(
     for i in range(0, len(chunks), BATCH_SIZE):
         batch = chunks[i : i + BATCH_SIZE]
         texts = [c["text"] for c in batch]
-        vectors = _embed_batch(texts, client, settings.embedding_model)
+        try:
+            vectors = _embed_batch(texts, client, settings.embedding_model)
+        except RetryError as exc:
+            raise EmbeddingError(
+                f"Embedding API failed after 3 attempts: {exc}"
+            ) from exc
 
         for chunk, vector in zip(batch, vectors):
             embedded.append({**chunk, "vector": vector})  # type: ignore[misc]

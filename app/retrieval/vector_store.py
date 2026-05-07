@@ -4,9 +4,9 @@ All Qdrant-specific code lives here. To swap to a different vector database
 (pgvector, Milvus, etc.), replace this file only — the interface stays the same.
 
 Public functions:
-    upsert_chunks()  — write embedded chunks to Qdrant
-    search()         — nearest-neighbour search with optional metadata filtering
-    delete_document()— remove all chunks belonging to a document_id
+    upsert_chunks()       — write embedded chunks to Qdrant
+    search()              — nearest-neighbour search with optional metadata filtering
+    delete_by_document_id()— remove all chunks belonging to a document_id
 """
 
 from qdrant_client import QdrantClient
@@ -21,6 +21,7 @@ from qdrant_client.models import (
 
 from app.core.config import Settings
 from app.ingestion.embedder import EmbeddedChunk
+from app.ingestion.exceptions import StorageError
 
 
 class SearchResult:
@@ -62,6 +63,9 @@ def upsert_chunks(
 
     Returns:
         Number of points upserted.
+
+    Raises:
+        StorageError: If the Qdrant upsert fails.
     """
     if not chunks:
         return 0
@@ -76,6 +80,7 @@ def upsert_chunks(
             payload={
                 "document_id": chunk["document_id"],
                 "filename": chunk["filename"],
+                "sha256": chunk["sha256"],
                 "page_number": chunk["page_number"],
                 "text": chunk["text"],
             },
@@ -83,7 +88,10 @@ def upsert_chunks(
         for chunk in chunks
     ]
 
-    client.upsert(collection_name=settings.qdrant_collection, points=points)
+    try:
+        client.upsert(collection_name=settings.qdrant_collection, points=points)
+    except Exception as exc:
+        raise StorageError(f"Qdrant upsert failed: {exc}") from exc
     return len(points)
 
 
@@ -133,15 +141,18 @@ def search(
     return [SearchResult(hit) for hit in hits]
 
 
-def delete_document(
+def delete_by_document_id(
     document_id: str,
     client: QdrantClient,
     settings: Settings,
 ) -> None:
     """Remove all chunks belonging to a document_id from Qdrant."""
-    client.delete(
-        collection_name=settings.qdrant_collection,
-        points_selector=Filter(
-            must=[FieldCondition(key="document_id", match=MatchValue(value=document_id))]
-        ),
-    )
+    try:
+        client.delete(
+            collection_name=settings.qdrant_collection,
+            points_selector=Filter(
+                must=[FieldCondition(key="document_id", match=MatchValue(value=document_id))]
+            ),
+        )
+    except Exception as exc:
+        raise StorageError(f"Qdrant delete failed: {exc}") from exc

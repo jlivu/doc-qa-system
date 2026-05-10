@@ -1,11 +1,7 @@
 """High-level retriever.
 
-retrieve() is the single entry point called by the query route. It embeds
-the question, calls the vector store, and returns structured results.
-
-Phase 3 additions (not yet implemented):
-    - Hybrid search: combine dense vector search with BM25 keyword scoring
-    - Re-ranking: apply a cross-encoder to re-score the top-k candidates
+embed_query() produces the dense vector for a user question.
+retrieve() orchestrates embedding + hybrid search and returns SourceChunks.
 """
 
 from openai import OpenAI
@@ -13,17 +9,37 @@ from qdrant_client import QdrantClient
 
 from app.api.schemas import QueryFilters, SourceChunk
 from app.core.config import Settings
-from app.retrieval.vector_store import SearchResult, search
+from app.ingestion.exceptions import EmbeddingError
+from app.retrieval.vector_store import SearchResult, hybrid_search
 
 
-def _embed_query(question: str, settings: Settings) -> list[float]:
-    """Embed a query string using the same model used during ingestion."""
-    client = OpenAI(api_key=settings.openai_api_key)
-    response = client.embeddings.create(
-        input=question,
-        model=settings.embedding_model,
-    )
-    return response.data[0].embedding
+def embed_query(question: str, settings: Settings) -> list[float]:
+    """Embed a query string using Ollama's OpenAI-compatible endpoint.
+
+    Args:
+        question: The user's natural language question.
+        settings: App settings (ollama_base_url, ollama_embedding_model).
+
+    Returns:
+        List of floats — the dense embedding vector.
+
+    Raises:
+        EmbeddingError: On any failure (no retry — Ollama is local).
+    """
+    try:
+        client = OpenAI(
+            base_url=settings.ollama_base_url + "/v1",
+            api_key="ollama",
+        )
+        response = client.embeddings.create(
+            input=question,
+            model=settings.ollama_embedding_model,
+        )
+        return response.data[0].embedding
+    except EmbeddingError:
+        raise
+    except Exception as exc:
+        raise EmbeddingError(f"Query embedding failed: {exc}") from exc
 
 
 def retrieve(
@@ -43,12 +59,13 @@ def retrieve(
         settings: App settings.
 
     Returns:
-        List of SourceChunk, ordered by descending similarity score.
+        List of SourceChunk, ordered by descending score.
     """
-    query_vector = _embed_query(question, settings)
+    query_vector = embed_query(question, settings)
 
-    results: list[SearchResult] = search(
+    results: list[SearchResult] = hybrid_search(
         query_vector=query_vector,
+        query_text=question,
         client=qdrant,
         settings=settings,
         top_k=top_k,

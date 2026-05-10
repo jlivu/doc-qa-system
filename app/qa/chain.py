@@ -1,42 +1,32 @@
-"""LangChain RAG chain.
+"""LangChain RAG chain with conversation history support.
 
-build_chain() returns a callable that accepts a question and a list of
-SourceChunks and returns a dict with 'answer' and 'sources'.
-
-The chain is intentionally simple for Phase 2: stuff the retrieved chunks
-into the prompt and call the LLM. Phase 3 can swap in a more sophisticated
-approach (MapReduce, Re-rank + Refine) without changing the route.
+answer() passes context and conversation history to the LLM and returns
+a grounded answer. Phase 3 can swap in a more sophisticated approach
+(MapReduce, Re-rank + Refine) without changing the route.
 """
 
 from functools import lru_cache
 
-from langchain_core.messages import HumanMessage, SystemMessage
+from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from langchain_ollama import ChatOllama
 
-from app.api.schemas import SourceChunk
+from app.api.schemas import ConversationTurn, SourceChunk
 from app.core.config import Settings
+from app.ingestion.exceptions import GenerationError
+from app.qa.context import build_context
 from app.qa.prompts import RAG_HUMAN_TEMPLATE, RAG_SYSTEM_PROMPT
-
-
-def _build_context(chunks: list[SourceChunk]) -> str:
-    """Format retrieved chunks into a context block for the prompt."""
-    parts = []
-    for i, chunk in enumerate(chunks, start=1):
-        parts.append(
-            f"[Source {i}] {chunk.filename}, page {chunk.page}\n{chunk.text}"
-        )
-    return "\n\n---\n\n".join(parts)
 
 
 @lru_cache
 def _get_llm(model: str, base_url: str) -> ChatOllama:
-    """Return a cached LLM instance. Re-creating on every request wastes resources."""
+    """Return a cached LLM instance."""
     return ChatOllama(model=model, base_url=base_url, temperature=0)
 
 
 def answer(
     question: str,
     chunks: list[SourceChunk],
+    history: list[ConversationTurn],
     settings: Settings,
 ) -> dict:
     """Run the RAG chain and return the answer with sources.
@@ -44,26 +34,34 @@ def answer(
     Args:
         question: The user's question.
         chunks: Retrieved chunks from the retriever.
+        history: Prior conversation turns.
         settings: App settings (ollama_llm_model, ollama_base_url).
 
     Returns:
         dict with keys 'answer' (str) and 'sources' (list[SourceChunk]).
-    """
-    if not chunks:
-        return {
-            "answer": "I could not find any relevant documents to answer that question.",
-            "sources": [],
-        }
 
-    context = _build_context(chunks)
+    Raises:
+        GenerationError: If the LLM call fails.
+    """
+    context = build_context(chunks)
     llm = _get_llm(settings.ollama_llm_model, settings.ollama_base_url)
 
-    messages = [
+    messages: list = [
         SystemMessage(content=RAG_SYSTEM_PROMPT.format(context=context)),
-        HumanMessage(content=RAG_HUMAN_TEMPLATE.format(question=question)),
     ]
 
-    response = llm.invoke(messages)
+    for turn in history:
+        if turn.role == "user":
+            messages.append(HumanMessage(content=turn.content))
+        else:
+            messages.append(AIMessage(content=turn.content))
+
+    messages.append(HumanMessage(content=RAG_HUMAN_TEMPLATE.format(question=question)))
+
+    try:
+        response = llm.invoke(messages)
+    except Exception as exc:
+        raise GenerationError(f"LLM generation failed: {exc}") from exc
 
     return {
         "answer": response.content,

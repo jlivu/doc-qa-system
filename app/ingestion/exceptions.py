@@ -27,3 +27,25 @@ class EmbeddingError(IngestionError):
 
 class StorageError(IngestionError):
     """Qdrant upsert or delete operation failed."""
+
+
+# ── Phase 2 — Query pipeline exceptions ──────────────────────────────────────
+
+class InvalidQuestionError(IngestionError):
+    """Question fails length or content validation."""
+
+
+class InvalidFiltersError(IngestionError):
+    """Both document_id and filename filters provided simultaneously."""
+
+
+class InvalidHistoryError(IngestionError):
+    """Conversation history entry has invalid role or empty content."""
+
+
+class RetrievalError(IngestionError):
+    """Qdrant search failed."""
+
+
+class GenerationError(IngestionError):
+    """LLM generation failed."""

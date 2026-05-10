@@ -1,3 +1,5 @@
+from typing import Literal
+
 from pydantic import BaseModel, Field
 
 
@@ -32,22 +34,16 @@ class QueryFilters(BaseModel):
     )
 
 
+class ConversationTurn(BaseModel):
+    role: str = Field(description="Must be 'user' or 'assistant'")
+    content: str = Field(min_length=1)
+
+
 class QueryRequest(BaseModel):
-    question: str = Field(
-        min_length=3,
-        max_length=1000,
-        description="The natural language question to answer"
-    )
-    filters: QueryFilters | None = Field(
-        default=None,
-        description="Optional metadata filters"
-    )
-    top_k: int | None = Field(
-        default=None,
-        ge=1,
-        le=20,
-        description="Number of chunks to retrieve. Overrides server default."
-    )
+    question: str = Field(min_length=3, max_length=1000)
+    filters: QueryFilters | None = Field(default=None)
+    top_k: int | None = Field(default=None, ge=1, le=20)
+    conversation_history: list[ConversationTurn] = Field(default_factory=list)
 
 
 class SourceChunk(BaseModel):
@@ -56,13 +52,14 @@ class SourceChunk(BaseModel):
     filename: str
     page: int
     text: str = Field(description="The chunk text used as context")
-    score: float = Field(description="Cosine similarity score (0–1)")
+    score: float = Field(description="Similarity score")
 
 
 class QueryResponse(BaseModel):
-    answer: str = Field(description="LLM-generated answer grounded in retrieved chunks")
-    sources: list[SourceChunk] = Field(description="Chunks used to generate the answer")
-    question: str = Field(description="The original question, echoed back")
+    answer: str
+    sources: list[SourceChunk]
+    found: bool
+    conversation_history: list[ConversationTurn]
 
 
 # ── Health ────────────────────────────────────────────────────────────────────

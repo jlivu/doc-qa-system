@@ -43,3 +43,7 @@ uploads/
 # Jupyter
 .ipynb_checkpoints/
 *.ipynb
+
+# Evaluation results (generated, not source)
+eval/results/
+!eval/results/.gitkeep

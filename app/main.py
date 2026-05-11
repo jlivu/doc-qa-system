@@ -3,7 +3,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api.routes import ingest, query, documents
+from app.api.routes import ingest, query, documents, jobs
 from app.api.schemas import HealthResponse
 from app.core.config import get_settings
 from app.core.dependencies import get_qdrant_client
@@ -13,7 +13,15 @@ settings = get_settings()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Startup: verify Qdrant is reachable and create collection if needed."""
+    """Startup: load reranker and verify Qdrant."""
+    # Load reranker singleton
+    try:
+        from app.retrieval.reranker import load_reranker
+        app.state.reranker = load_reranker(settings.reranker_model)
+    except Exception:
+        app.state.reranker = None  # Tests will override via DI
+
+    # Verify Qdrant
     try:
         client = get_qdrant_client()
         collections = [c.name for c in client.get_collections().collections]
@@ -24,7 +32,7 @@ async def lifespan(app: FastAPI):
                 vectors_config=VectorParams(size=1536, distance=Distance.COSINE),
             )
     except Exception:
-        pass  # Qdrant may not be available yet; upsert_chunks creates the collection on demand
+        pass
     yield
 
 
@@ -49,6 +57,7 @@ app.add_middleware(
 app.include_router(ingest.router)
 app.include_router(query.router)
 app.include_router(documents.router)
+app.include_router(jobs.router)
 
 
 @app.get("/health", response_model=HealthResponse, tags=["health"])

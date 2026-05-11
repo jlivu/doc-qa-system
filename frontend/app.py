@@ -53,6 +53,10 @@ if "last_response" not in st.session_state:
     st.session_state.last_response = None
 if "needs_refresh" not in st.session_state:
     st.session_state.needs_refresh = True
+if "polling_job_id" not in st.session_state:
+    st.session_state.polling_job_id = None
+if "polling_filename" not in st.session_state:
+    st.session_state.polling_filename = None
 if "confirm_delete_id" not in st.session_state:
     st.session_state.confirm_delete_id = None
 if "confirm_delete_name" not in st.session_state:
@@ -82,19 +86,60 @@ with st.sidebar:
 
     uploaded = st.file_uploader("Upload PDF", type=["pdf"])
     if st.button("Ingest") and uploaded:
-        with st.spinner("Ingesting..."):
+        try:
+            files = {"file": (uploaded.name, uploaded.read(), "application/pdf")}
+            resp = api_post_file("/ingest", files=files)
+            if resp.status_code == 202:
+                job = resp.json()
+                st.session_state.polling_job_id = job["job_id"]
+                st.session_state.polling_filename = job["filename"]
+            elif resp.status_code == 201:
+                data = resp.json()
+                st.success(f"{data['pages']} pages, {data['chunks']} chunks")
+                refresh_documents()
+            else:
+                st.error(resp.json().get("detail", "Ingestion failed"))
+        except requests.RequestException as e:
+            st.error(f"Cannot reach the API: {e}")
+
+    # Polling loop for async ingestion
+    if st.session_state.polling_job_id:
+        import time
+        status_box = st.empty()
+        job_id = st.session_state.polling_job_id
+        fname = st.session_state.polling_filename
+        status_box.info(f"Ingesting {fname}...")
+        start = time.time()
+        while time.time() - start < 300:
             try:
-                files = {"file": (uploaded.name, uploaded.read(), "application/pdf")}
-                resp = api_post_file("/ingest", files=files)
-                if resp.status_code == 201:
-                    data = resp.json()
-                    st.success(f"{data['pages']} pages, {data['chunks']} chunks")
+                resp = api_get(f"/jobs/{job_id}")
+                if resp.status_code != 200:
+                    break
+                job = resp.json()
+                if job["status"] == "completed":
+                    status_box.success(
+                        f"{job['pages']} pages, {job['chunks']} chunks"
+                    )
                     refresh_documents()
-                else:
-                    detail = resp.json().get("detail", "Ingestion failed")
-                    st.error(detail)
-            except requests.RequestException as e:
-                st.error(f"Cannot reach the API: {e}")
+                    st.session_state.polling_job_id = None
+                    break
+                if job["status"] == "failed":
+                    status_box.error(
+                        f"Ingestion failed: {job.get('error', 'Unknown error')}"
+                    )
+                    st.session_state.polling_job_id = None
+                    break
+                status_box.info(
+                    f"Processing {fname}... (this may take a moment)"
+                )
+            except requests.RequestException:
+                status_box.error("Lost connection to API during polling.")
+                st.session_state.polling_job_id = None
+                break
+            time.sleep(2)
+        else:
+            status_box.error("Ingestion timed out after 5 minutes.")
+            st.session_state.polling_job_id = None
 
     st.divider()
 

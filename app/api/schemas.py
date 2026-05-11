@@ -20,6 +20,33 @@ class ErrorResponse(BaseModel):
     detail: str = Field(description="Human-readable error description")
 
 
+# ── Async ingestion ──────────────────────────────────────────────────────────
+
+class IngestAcceptedResponse(BaseModel):
+    job_id: str
+    filename: str
+    status: str
+    message: str
+
+
+class JobStatusResponse(BaseModel):
+    job_id: str
+    status: str
+    filename: str
+    created_at: str
+    updated_at: str
+    document_id: str | None = None
+    pages: int | None = None
+    chunks: int | None = None
+    replaced: bool | None = None
+    error: str | None = None
+
+
+class JobListResponse(BaseModel):
+    jobs: list[JobStatusResponse]
+    total: int
+
+
 # ── Documents ────────────────────────────────────────────────────────────────
 
 class DocumentMetadataResponse(BaseModel):

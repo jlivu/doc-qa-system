@@ -1,7 +1,7 @@
 from functools import lru_cache
 from typing import Annotated
 
-from fastapi import Depends
+from fastapi import Depends, Request
 from qdrant_client import QdrantClient
 
 from app.core.config import Settings, get_settings
@@ -17,6 +17,12 @@ def get_qdrant_client() -> QdrantClient:
     return QdrantClient(url=get_settings().qdrant_url)
 
 
+def get_reranker(request: Request):
+    """Return the reranker model loaded at startup."""
+    return request.app.state.reranker
+
+
 # Convenience type aliases for use in route signatures
 SettingsDep = Annotated[Settings, Depends(get_settings)]
 QdrantDep = Annotated[QdrantClient, Depends(get_qdrant_client)]
+RerankerDep = Annotated[object, Depends(get_reranker)]

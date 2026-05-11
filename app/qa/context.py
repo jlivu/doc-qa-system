@@ -13,30 +13,31 @@ def build_context(chunks: list[SourceChunk]) -> str:
     return "\n\n---\n\n".join(parts)
 
 
-def is_not_found(chunks: list[SourceChunk], threshold: float = 0.0) -> bool:
+def is_not_found(chunks: list[SourceChunk], threshold: float = -5.0) -> bool:
     """Return True if no relevant chunks were found.
 
-    With RRF scoring the maximum possible score is ~0.033 (rank 1 in
-    both dense and sparse lists with k=60).  A score-based threshold
-    is therefore not meaningful — we simply check whether the chunk
-    list is empty.  The *threshold* parameter is kept for backward
+    After Phase 4 reranking, scores are cross-encoder logits (typically
+    -10 to +10). A score below -5.0 means the retrieved chunks are
+    genuinely irrelevant. The *threshold* parameter is kept for backward
     compatibility with tests that pass it explicitly.
     """
     if not chunks:
         return True
-    if threshold <= 0.0:
-        return False
     return max(c.score for c in chunks) < threshold
 
 
 def compute_confidence(chunks: list[SourceChunk]) -> str:
-    """Derive a confidence level from the top source RRF score."""
+    """Derive a confidence level from the top cross-encoder score.
+
+    Cross-encoder scores are raw logits (typically -10 to +10).
+    A score above 0 generally indicates relevance.
+    """
     if not chunks:
         return "low"
     top_score = max(c.score for c in chunks)
-    if top_score >= 0.025:
+    if top_score >= 3.0:
         return "high"
-    if top_score >= 0.015:
+    if top_score >= 0.0:
         return "medium"
     return "low"
 

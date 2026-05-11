@@ -1,0 +1,122 @@
+[
+  {
+    "id": "q01",
+    "question": "What are the procurement methods available under the Government Contracts and Tenders regulation?",
+    "reference_answer": "The procurement methods include open tendering, selective tendering, limited tendering, and request for quotation.",
+    "expected_source_pages": [5, 6],
+    "expected_found": true,
+    "document_filename": "GOV_Contracts_and_Tenders_Regulation_Consolidation_Edition_2021_Order_No.160_of_2021.pdf"
+  },
+  {
+    "id": "q02",
+    "question": "What is the threshold value for open tendering?",
+    "reference_answer": "Open tendering is required for contracts above VT 5,000,000.",
+    "expected_source_pages": [7],
+    "expected_found": true,
+    "document_filename": "GOV_Contracts_and_Tenders_Regulation_Consolidation_Edition_2021_Order_No.160_of_2021.pdf"
+  },
+  {
+    "id": "q03",
+    "question": "Who is responsible for approving tender evaluation reports?",
+    "reference_answer": "The Tender Board is responsible for approving tender evaluation reports.",
+    "expected_source_pages": [10, 11],
+    "expected_found": true,
+    "document_filename": "GOV_Contracts_and_Tenders_Regulation_Consolidation_Edition_2021_Order_No.160_of_2021.pdf"
+  },
+  {
+    "id": "q04",
+    "question": "What are the grounds for disqualifying a tenderer?",
+    "reference_answer": "A tenderer may be disqualified for providing false information, failing to meet eligibility criteria, or being involved in corrupt practices.",
+    "expected_source_pages": [12, 13],
+    "expected_found": true,
+    "document_filename": "GOV_Contracts_and_Tenders_Regulation_Consolidation_Edition_2021_Order_No.160_of_2021.pdf"
+  },
+  {
+    "id": "q05",
+    "question": "How many days must a tender notice be published before the submission deadline?",
+    "reference_answer": "A tender notice must be published at least 30 days before the submission deadline.",
+    "expected_source_pages": [8, 9],
+    "expected_found": true,
+    "document_filename": "GOV_Contracts_and_Tenders_Regulation_Consolidation_Edition_2021_Order_No.160_of_2021.pdf"
+  },
+  {
+    "id": "q06",
+    "question": "What is the process for handling complaints about tender awards?",
+    "reference_answer": "Complaints must be submitted in writing to the Tender Board within a specified period. The Board reviews the complaint and may suspend the award pending investigation.",
+    "expected_source_pages": [15, 16],
+    "expected_found": true,
+    "document_filename": "GOV_Contracts_and_Tenders_Regulation_Consolidation_Edition_2021_Order_No.160_of_2021.pdf"
+  },
+  {
+    "id": "q07",
+    "question": "What was the total government expenditure in 2023?",
+    "reference_answer": "The total government expenditure in 2023 was approximately VT 50 billion.",
+    "expected_source_pages": [3, 4],
+    "expected_found": true,
+    "document_filename": "2023_Financial_Statements.pdf"
+  },
+  {
+    "id": "q08",
+    "question": "What was the revenue from taxes in the 2023 financial year?",
+    "reference_answer": "Tax revenue in 2023 was approximately VT 25 billion.",
+    "expected_source_pages": [5, 6],
+    "expected_found": true,
+    "document_filename": "2023_Financial_Statements.pdf"
+  },
+  {
+    "id": "q09",
+    "question": "What is the largest category of government spending?",
+    "reference_answer": "The largest category of government spending is personnel emoluments (salaries and wages).",
+    "expected_source_pages": [7, 8],
+    "expected_found": true,
+    "document_filename": "2023_Financial_Statements.pdf"
+  },
+  {
+    "id": "q10",
+    "question": "What was the budget deficit or surplus in 2023?",
+    "reference_answer": "The government recorded a budget deficit in 2023.",
+    "expected_source_pages": [3, 4],
+    "expected_found": true,
+    "document_filename": "2023_Financial_Statements.pdf"
+  },
+  {
+    "id": "q11",
+    "question": "How much was spent on education in 2023?",
+    "reference_answer": "Education spending in 2023 was one of the largest sectoral allocations.",
+    "expected_source_pages": [9, 10],
+    "expected_found": true,
+    "document_filename": "2023_Financial_Statements.pdf"
+  },
+  {
+    "id": "q12",
+    "question": "What is the annual leave entitlement for public servants?",
+    "reference_answer": "Public servants are entitled to 20 working days of annual leave per year.",
+    "expected_source_pages": [30, 31],
+    "expected_found": true,
+    "document_filename": "PSSRM.pdf"
+  },
+  {
+    "id": "q13",
+    "question": "What are the disciplinary procedures for misconduct in the public service?",
+    "reference_answer": "Disciplinary procedures include investigation, hearing before a disciplinary board, and possible sanctions including dismissal.",
+    "expected_source_pages": [50, 51],
+    "expected_found": true,
+    "document_filename": "PSSRM.pdf"
+  },
+  {
+    "id": "q14",
+    "question": "What is the population of Vanuatu in 2025?",
+    "reference_answer": "",
+    "expected_source_pages": [],
+    "expected_found": false,
+    "document_filename": "PSSRM.pdf"
+  },
+  {
+    "id": "q15",
+    "question": "What is the current exchange rate between Vatu and US Dollar?",
+    "reference_answer": "",
+    "expected_source_pages": [],
+    "expected_found": false,
+    "document_filename": "PSSRM.pdf"
+  }
+]

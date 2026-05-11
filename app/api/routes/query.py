@@ -4,7 +4,7 @@ from fastapi import APIRouter, status
 from fastapi.responses import JSONResponse
 
 from app.api.schemas import QueryRequest, QueryResponse, ConversationTurn, SourceChunk
-from app.core.dependencies import QdrantDep, SettingsDep
+from app.core.dependencies import QdrantDep, SettingsDep, RerankerDep
 from app.ingestion.exceptions import (
     InvalidQuestionError,
     InvalidFiltersError,
@@ -19,6 +19,7 @@ from app.retrieval.retriever import embed_query
 from app.retrieval.vector_store import hybrid_search, SearchResult
 from app.qa.chain import answer
 from app.qa.context import is_not_found, build_not_found_answer, compute_confidence
+from app.retrieval.reranker import rerank
 
 router = APIRouter(prefix="/query", tags=["query"])
 
@@ -47,6 +48,7 @@ async def query_documents(
     payload: QueryRequest,
     settings: SettingsDep,
     qdrant: QdrantDep,
+    reranker: RerankerDep,
 ) -> QueryResponse:
     try:
         history = payload.conversation_history or []
@@ -95,6 +97,13 @@ async def query_documents(
             )
             for s in source_chunks
         ]
+
+        # 5b. Rerank
+        if reranker is not None:
+            chunks_as_source = rerank(
+                payload.question, chunks_as_source,
+                settings.reranker_top_k, reranker,
+            )
 
         # 6. Generate answer
         result = answer(payload.question, chunks_as_source, history, settings)

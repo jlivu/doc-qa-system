@@ -55,3 +55,9 @@ class GenerationError(IngestionError):
 
 class DocumentNotFoundError(IngestionError):
     """No chunks exist for the requested document_id."""
+
+
+# ── Phase 4 — Async ingestion exceptions ────────────────────────────────────
+
+class JobNotFoundError(IngestionError):
+    """No job found with the given ID."""

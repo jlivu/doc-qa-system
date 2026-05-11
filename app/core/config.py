@@ -24,7 +24,11 @@ class Settings(BaseSettings):
     chunk_overlap: int = 100
 
     # Retrieval
-    retrieval_top_k: int = 5
+    retrieval_top_k: int = 10
+
+    # Reranker
+    reranker_model: str = "cross-encoder/ms-marco-MiniLM-L-6-v2"
+    reranker_top_k: int = 5
 
     # API
     cors_origins: list[str] = ["http://localhost:8501"]

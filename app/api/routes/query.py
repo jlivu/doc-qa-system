@@ -111,16 +111,21 @@ async def query_documents(
             for s in result["sources"]
         ]
 
-        # 8. Build updated history
+        # 8. Guard against empty answer
+        answer_text = result["answer"]
+        if not answer_text or not answer_text.strip():
+            answer_text = "I was unable to generate an answer. Please try rephrasing your question."
+
+        # 9. Build updated history
         updated_history = list(history) + [
             ConversationTurn(role="user", content=payload.question),
-            ConversationTurn(role="assistant", content=result["answer"]),
+            ConversationTurn(role="assistant", content=answer_text),
         ]
 
         confidence = compute_confidence(chunks_as_source)
 
         return QueryResponse(
-            answer=result["answer"],
+            answer=answer_text,
             sources=sources,
             found=True,
             confidence=confidence,

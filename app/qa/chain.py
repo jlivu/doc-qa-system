@@ -78,6 +78,8 @@ def answer(
             clean_lines.append(line)
 
     clean_answer = "\n".join(clean_lines).strip()
+    if not clean_answer:
+        clean_answer = "I was unable to generate an answer. Please try rephrasing your question."
 
     # Apply highlights to source chunks (1-indexed)
     for i, chunk in enumerate(chunks, start=1):

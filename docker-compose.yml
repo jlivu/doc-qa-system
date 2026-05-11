@@ -36,7 +36,8 @@ services:
     env_file:
       - .env
     environment:
-      - API_URL=http://api:8001
+      - API_URL=http://api:8000
+      - HOME=/tmp
     depends_on:
       - api
     restart: unless-stopped

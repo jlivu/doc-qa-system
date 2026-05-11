@@ -17,7 +17,13 @@ from app.ingestion.exceptions import GenerationError
 from app.qa.context import build_context
 from app.qa.prompts import RAG_HUMAN_TEMPLATE, RAG_SYSTEM_PROMPT
 
-HIGHLIGHT_RE = re.compile(r"HIGHLIGHT\[(\d+)\]:\s*(.+)")
+HIGHLIGHT_RE = re.compile(
+    r"HIGHLIGHT\[?(\d+)\]?:?\s*"        # HIGHLIGHT[1]: or HIGHLIGHT1: or HIGHLIGHT1
+    r"(?:[\w./\-]+,\s*page\s*\d+:\s*)?" # optional "file.pdf, page 3: " prefix
+    r'["""]?'                            # optional opening smart/straight quote
+    r"(.+?)"                             # the highlight text (non-greedy)
+    r'["""]?\s*$'                        # optional closing quote + end of line
+)
 
 
 @lru_cache

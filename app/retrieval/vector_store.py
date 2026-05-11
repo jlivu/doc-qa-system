@@ -11,9 +11,12 @@ Public functions:
     text_to_sparse_vector()— convert text to a sparse BM25-style vector
 """
 
+import logging
 import math
 import re
 from collections import Counter
+
+logger = logging.getLogger(__name__)
 
 from qdrant_client import QdrantClient
 from qdrant_client.models import (
@@ -223,6 +226,7 @@ def hybrid_search(
         with_payload=True,
     )
     dense_results = [SearchResult(h) for h in dense_hits]
+    logger.debug("hybrid_search: dense returned %d results", len(dense_results))
 
     # Sparse search — fall back to dense-only on failure
     try:
@@ -237,8 +241,9 @@ def hybrid_search(
             with_payload=True,
         )
         sparse_results = [SearchResult(h) for h in sparse_hits]
+        logger.debug("hybrid_search: sparse returned %d results", len(sparse_results))
     except Exception:
-        # No sparse index — return dense-only results
+        logger.debug("hybrid_search: sparse search failed, falling back to dense-only")
         for r in dense_results:
             r.score = round(r.score, 4)
         return dense_results[:top_k]

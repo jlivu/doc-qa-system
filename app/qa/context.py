@@ -13,10 +13,19 @@ def build_context(chunks: list[SourceChunk]) -> str:
     return "\n\n---\n\n".join(parts)
 
 
-def is_not_found(chunks: list[SourceChunk], threshold: float = 0.3) -> bool:
-    """Return True if no relevant chunks were found."""
+def is_not_found(chunks: list[SourceChunk], threshold: float = 0.0) -> bool:
+    """Return True if no relevant chunks were found.
+
+    With RRF scoring the maximum possible score is ~0.033 (rank 1 in
+    both dense and sparse lists with k=60).  A score-based threshold
+    is therefore not meaningful — we simply check whether the chunk
+    list is empty.  The *threshold* parameter is kept for backward
+    compatibility with tests that pass it explicitly.
+    """
     if not chunks:
         return True
+    if threshold <= 0.0:
+        return False
     return max(c.score for c in chunks) < threshold
 
 

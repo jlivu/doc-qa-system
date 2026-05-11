@@ -1,85 +1,191 @@
 """Streamlit frontend for the Document Q&A System.
 
-Phase 3 — implement after the API endpoints are working.
-Run locally with: streamlit run frontend/app.py
+Professional, demo-ready UI with PDF upload, query interface with
+conversation history sidebar, document list with delete, and source
+citation display with highlights and confidence badges.
 """
 
 import os
+
 import requests
 import streamlit as st
 
 API_URL = os.getenv("API_URL", "http://localhost:8000")
 
+
+# ── API helpers ──────────────────────────────────────────────────────────────
+
+def api_get(path: str):
+    return requests.get(f"{API_URL}{path}", timeout=30)
+
+
+def api_post_json(path: str, payload: dict):
+    return requests.post(f"{API_URL}{path}", json=payload, timeout=60)
+
+
+def api_post_file(path: str, files: dict):
+    return requests.post(f"{API_URL}{path}", files=files, timeout=120)
+
+
+def api_delete(path: str):
+    return requests.delete(f"{API_URL}{path}", timeout=30)
+
+
+def refresh_documents():
+    """Fetch the document list from the API and cache in session state."""
+    try:
+        resp = api_get("/documents")
+        if resp.status_code == 200:
+            st.session_state.documents = resp.json()["documents"]
+        else:
+            st.session_state.documents = []
+    except requests.RequestException:
+        st.session_state.documents = []
+
+
+# ── Session state init ───────────────────────────────────────────────────────
+
+if "conversation_history" not in st.session_state:
+    st.session_state.conversation_history = []
+if "documents" not in st.session_state:
+    st.session_state.documents = []
+if "last_response" not in st.session_state:
+    st.session_state.last_response = None
+if "needs_refresh" not in st.session_state:
+    st.session_state.needs_refresh = True
+
+# Refresh document list on first load or after ingest/delete
+if st.session_state.needs_refresh:
+    refresh_documents()
+    st.session_state.needs_refresh = False
+
+
+# ── Page config ──────────────────────────────────────────────────────────────
+
 st.set_page_config(
-    page_title="Document Q&A",
-    page_icon=":page_facing_up:",
+    page_title="Document Q&A — Vanuatu Gov",
+    page_icon="📄",
     layout="wide",
 )
 
-st.title("Intelligent Document Q&A")
-st.caption("Upload government documents and ask questions in plain language.")
 
-# ── Sidebar — document upload ─────────────────────────────────────────────────
+# ── Sidebar — Document Library ───────────────────────────────────────────────
+
 with st.sidebar:
-    st.header("Upload a document")
-    uploaded_file = st.file_uploader("Choose a PDF", type=["pdf"])
+    st.header("📄 Document Library")
 
-    if uploaded_file and st.button("Ingest document"):
+    uploaded = st.file_uploader("Upload PDF", type=["pdf"])
+    if st.button("Ingest") and uploaded:
         with st.spinner("Ingesting..."):
             try:
-                resp = requests.post(
-                    f"{API_URL}/ingest",
-                    files={"file": (uploaded_file.name, uploaded_file, "application/pdf")},
-                    timeout=120,
-                )
-                resp.raise_for_status()
-                data = resp.json()
-                st.success(
-                    f"Ingested **{data['filename']}** — "
-                    f"{data['pages']} pages, {data['chunks']} chunks"
-                )
-                st.session_state["document_id"] = data["document_id"]
-                st.session_state["filename"] = data["filename"]
+                files = {"file": (uploaded.name, uploaded.read(), "application/pdf")}
+                resp = api_post_file("/ingest", files=files)
+                if resp.status_code == 201:
+                    data = resp.json()
+                    st.success(f"{data['pages']} pages, {data['chunks']} chunks")
+                    refresh_documents()
+                else:
+                    detail = resp.json().get("detail", "Ingestion failed")
+                    st.error(detail)
             except requests.RequestException as e:
-                st.error(f"Ingestion failed: {e}")
+                st.error(f"Cannot reach the API: {e}")
 
-    if "filename" in st.session_state:
-        st.info(f"Active document: **{st.session_state['filename']}**")
+    st.divider()
 
-# ── Main — question input ─────────────────────────────────────────────────────
-question = st.text_input(
-    "Ask a question about your document",
-    placeholder="What was the total revenue in 2024?",
-)
+    if st.session_state.documents:
+        for doc in st.session_state.documents:
+            cols = st.columns([4, 1, 1, 1])
+            cols[0].write(doc["filename"])
+            cols[1].write(f"{doc['pages']}p")
+            cols[2].write(f"{doc['chunk_count']}c")
+            if cols[3].button("🗑", key=f"del-{doc['document_id']}"):
+                try:
+                    resp = api_delete(f"/documents/{doc['document_id']}")
+                    if resp.status_code == 200:
+                        refresh_documents()
+                        st.rerun()
+                    else:
+                        st.error("Delete failed")
+                except requests.RequestException as e:
+                    st.error(f"Cannot reach the API: {e}")
+    else:
+        st.caption("No documents ingested yet.")
+
+    # ── Sidebar — Conversation History ────────────────────────────────────
+
+    st.divider()
+    st.header("💬 Conversation")
+
+    history = st.session_state.conversation_history
+    for i in range(0, len(history), 2):
+        if i < len(history):
+            st.caption(f"Q: {history[i]['content'][:80]}...")
+        if i + 1 < len(history):
+            st.caption(f"A: {history[i + 1]['content'][:100]}...")
+
+    if st.button("Clear conversation"):
+        st.session_state.conversation_history = []
+        st.session_state.last_response = None
+        st.rerun()
+
+
+# ── Main — Query interface ───────────────────────────────────────────────────
+
+st.title("🔍 Ask a Question")
+
+question = st.text_input("Question", placeholder="What was the total revenue in 2024?")
+
+doc_names = ["All documents"] + [d["filename"] for d in st.session_state.documents]
+scope = st.selectbox("Scope", doc_names)
 
 if st.button("Ask", type="primary") and question:
-    with st.spinner("Searching and generating answer..."):
+    payload: dict = {
+        "question": question,
+        "conversation_history": st.session_state.conversation_history,
+    }
+    if scope != "All documents":
+        doc = next(
+            (d for d in st.session_state.documents if d["filename"] == scope),
+            None,
+        )
+        if doc:
+            payload["filters"] = {"document_id": doc["document_id"]}
+
+    with st.spinner("Thinking..."):
         try:
-            payload = {
-                "question": question,
-                "filters": (
-                    {"document_id": st.session_state["document_id"]}
-                    if "document_id" in st.session_state
-                    else None
-                ),
-            }
-            resp = requests.post(f"{API_URL}/query", json=payload, timeout=60)
-            resp.raise_for_status()
-            data = resp.json()
-
-            st.markdown("### Answer")
-            st.write(data["answer"])
-
-            if data.get("sources"):
-                st.markdown("### Sources")
-                for src in data["sources"]:
-                    with st.expander(f"{src['filename']} — page {src['page']} (score: {src['score']:.2f})"):
-                        st.write(src["text"])
-
-        except requests.HTTPError as e:
-            if e.response.status_code == 501:
-                st.warning("The query pipeline is not yet implemented (Phase 2).")
+            resp = api_post_json("/query", payload)
+            if resp.status_code == 200:
+                data = resp.json()
+                st.session_state.conversation_history = data["conversation_history"]
+                st.session_state.last_response = data
             else:
-                st.error(f"Query failed: {e}")
+                detail = resp.json().get("detail", "Query failed")
+                st.error(detail)
         except requests.RequestException as e:
-            st.error(f"Could not reach the API: {e}")
+            st.error(f"Cannot reach the API: {e}")
+
+
+# ── Main — Answer display ───────────────────────────────────────────────────
+
+data = st.session_state.last_response
+if data:
+    st.markdown(data["answer"])
+
+    conf = data.get("confidence", "low")
+    if conf == "high":
+        st.success("Confidence: ●●● High")
+    elif conf == "medium":
+        st.warning("Confidence: ●● Medium")
+    else:
+        st.error("Confidence: ● Low")
+
+    if not data["found"]:
+        st.info("No direct answer found. Try rephrasing your question.")
+    else:
+        st.subheader("Sources")
+        for src in data["sources"]:
+            label = f"📄 {src['filename']}, page {src['page']} (score: {src['score']})"
+            with st.expander(label):
+                if src.get("highlight"):
+                    st.markdown(f"> **{src['highlight']}**")
+                st.text(src["text"])

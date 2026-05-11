@@ -18,7 +18,7 @@ from app.query.validator import validate_query_request
 from app.retrieval.retriever import embed_query
 from app.retrieval.vector_store import hybrid_search, SearchResult
 from app.qa.chain import answer
-from app.qa.context import is_not_found, build_not_found_answer
+from app.qa.context import is_not_found, build_not_found_answer, compute_confidence
 
 router = APIRouter(prefix="/query", tags=["query"])
 
@@ -80,6 +80,7 @@ async def query_documents(
                 answer=answer_text,
                 sources=[],
                 found=False,
+                confidence="low",
                 conversation_history=updated_history,
             )
 
@@ -116,10 +117,13 @@ async def query_documents(
             ConversationTurn(role="assistant", content=result["answer"]),
         ]
 
+        confidence = compute_confidence(chunks_as_source)
+
         return QueryResponse(
             answer=result["answer"],
             sources=sources,
             found=True,
+            confidence=confidence,
             conversation_history=updated_history,
         )
 

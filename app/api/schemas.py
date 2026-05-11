@@ -20,6 +20,26 @@ class ErrorResponse(BaseModel):
     detail: str = Field(description="Human-readable error description")
 
 
+# ── Documents ────────────────────────────────────────────────────────────────
+
+class DocumentMetadataResponse(BaseModel):
+    document_id: str
+    filename: str
+    sha256: str
+    chunk_count: int
+    pages: int
+
+
+class DocumentListResponse(BaseModel):
+    documents: list[DocumentMetadataResponse]
+    total: int
+
+
+class DeleteDocumentResponse(BaseModel):
+    document_id: str
+    message: str = "Document deleted successfully"
+
+
 # ── Query ─────────────────────────────────────────────────────────────────────
 
 class QueryFilters(BaseModel):
@@ -53,12 +73,14 @@ class SourceChunk(BaseModel):
     page: int
     text: str = Field(description="The chunk text used as context")
     score: float = Field(description="Similarity score")
+    highlight: str | None = None
 
 
 class QueryResponse(BaseModel):
     answer: str
     sources: list[SourceChunk]
     found: bool
+    confidence: str = "low"
     conversation_history: list[ConversationTurn]
 
 

@@ -29,6 +29,18 @@ def is_not_found(chunks: list[SourceChunk], threshold: float = 0.0) -> bool:
     return max(c.score for c in chunks) < threshold
 
 
+def compute_confidence(chunks: list[SourceChunk]) -> str:
+    """Derive a confidence level from the top source RRF score."""
+    if not chunks:
+        return "low"
+    top_score = max(c.score for c in chunks)
+    if top_score >= 0.025:
+        return "high"
+    if top_score >= 0.015:
+        return "medium"
+    return "low"
+
+
 def build_not_found_answer(chunks: list[SourceChunk]) -> str:
     """Build a helpful not-found message, optionally listing related topics."""
     if not chunks:

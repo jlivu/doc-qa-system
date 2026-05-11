@@ -1,10 +1,11 @@
-"""LangChain RAG chain with conversation history support.
+"""LangChain RAG chain with conversation history and highlight extraction.
 
-answer() passes context and conversation history to the LLM and returns
-a grounded answer. Phase 3 can swap in a more sophisticated approach
-(MapReduce, Re-rank + Refine) without changing the route.
+answer() passes context and conversation history to the LLM, parses
+HIGHLIGHT[N]: markers from the response, strips them from the visible
+answer, and sets chunk.highlight on each source.
 """
 
+import re
 from functools import lru_cache
 
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
@@ -15,6 +16,8 @@ from app.core.config import Settings
 from app.ingestion.exceptions import GenerationError
 from app.qa.context import build_context
 from app.qa.prompts import RAG_HUMAN_TEMPLATE, RAG_SYSTEM_PROMPT
+
+HIGHLIGHT_RE = re.compile(r"HIGHLIGHT\[(\d+)\]:\s*(.+)")
 
 
 @lru_cache
@@ -31,11 +34,9 @@ def answer(
 ) -> dict:
     """Run the RAG chain and return the answer with sources.
 
-    Args:
-        question: The user's question.
-        chunks: Retrieved chunks from the retriever.
-        history: Prior conversation turns.
-        settings: App settings (ollama_llm_model, ollama_base_url).
+    Parses HIGHLIGHT[N]: markers from the LLM response, strips them
+    from the visible answer text, and sets chunk.highlight on each
+    matching source.
 
     Returns:
         dict with keys 'answer' (str) and 'sources' (list[SourceChunk]).
@@ -63,7 +64,27 @@ def answer(
     except Exception as exc:
         raise GenerationError(f"LLM generation failed: {exc}") from exc
 
+    # Parse HIGHLIGHT[N]: markers and strip them from the answer
+    raw_answer = response.content
+    highlights: dict[int, str] = {}
+    clean_lines: list[str] = []
+
+    for line in raw_answer.split("\n"):
+        m = HIGHLIGHT_RE.match(line.strip())
+        if m:
+            source_idx = int(m.group(1))
+            highlights[source_idx] = m.group(2).strip()
+        else:
+            clean_lines.append(line)
+
+    clean_answer = "\n".join(clean_lines).strip()
+
+    # Apply highlights to source chunks (1-indexed)
+    for i, chunk in enumerate(chunks, start=1):
+        if i in highlights:
+            chunk.highlight = highlights[i]
+
     return {
-        "answer": response.content,
+        "answer": clean_answer,
         "sources": chunks,
     }

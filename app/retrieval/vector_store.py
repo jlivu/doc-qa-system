@@ -251,6 +251,77 @@ def hybrid_search(
     return _reciprocal_rank_fusion(dense_results, sparse_results, top_k)
 
 
+# ── Document listing ─────────────────────────────────────────────────────────
+
+def list_documents(
+    client: QdrantClient,
+    settings: Settings,
+) -> list[dict]:
+    """Scroll all points and return deduplicated document metadata."""
+    try:
+        docs: dict[str, dict] = {}
+        offset = None
+        page_size = 1000
+
+        while True:
+            scroll_kwargs: dict = {
+                "collection_name": settings.qdrant_collection,
+                "limit": page_size,
+                "with_payload": True,
+                "with_vectors": False,
+            }
+            if offset is not None:
+                scroll_kwargs["offset"] = offset
+
+            points, next_offset = client.scroll(**scroll_kwargs)
+
+            for point in points:
+                doc_id = point.payload["document_id"]
+                if doc_id not in docs:
+                    docs[doc_id] = {
+                        "document_id": doc_id,
+                        "filename": point.payload.get("filename", ""),
+                        "sha256": point.payload.get("sha256", ""),
+                        "chunk_count": 0,
+                        "pages": 0,
+                    }
+                docs[doc_id]["chunk_count"] += 1
+                page_num = point.payload.get("page_number", 0)
+                if page_num > docs[doc_id]["pages"]:
+                    docs[doc_id]["pages"] = page_num
+
+            if next_offset is None:
+                break
+            offset = next_offset
+
+        return list(docs.values())
+
+    except Exception:
+        return []
+
+
+def find_document_by_id(
+    document_id: str,
+    client: QdrantClient,
+    settings: Settings,
+) -> bool:
+    """Return True if at least one chunk with this document_id exists."""
+    try:
+        points, _ = client.scroll(
+            collection_name=settings.qdrant_collection,
+            scroll_filter=Filter(
+                must=[FieldCondition(key="document_id",
+                                     match=MatchValue(value=document_id))]
+            ),
+            limit=1,
+            with_payload=False,
+            with_vectors=False,
+        )
+        return len(points) > 0
+    except Exception:
+        return False
+
+
 # ── Delete ───────────────────────────────────────────────────────────────────
 
 def delete_by_document_id(

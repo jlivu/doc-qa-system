@@ -49,3 +49,9 @@ class RetrievalError(IngestionError):
 
 class GenerationError(IngestionError):
     """LLM generation failed."""
+
+
+# ── Phase 3 — Document management exceptions ────────────────────────────────
+
+class DocumentNotFoundError(IngestionError):
+    """No chunks exist for the requested document_id."""

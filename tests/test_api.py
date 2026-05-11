@@ -350,3 +350,144 @@ def test_query_invalid_question_returns_422(client):
 
     response = client.post("/query", json={"question": "   "})  # whitespace only
     assert response.status_code == 422
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Phase 3 — Document listing tests (AC-LIST)
+#
+# These tests use inline imports so Phase 1+2 tests are not broken
+# when the Phase 3 production code does not yet exist.
+# ══════════════════════════════════════════════════════════════════════════════
+
+# AC-LIST-01 — GET /documents returns HTTP 200 with a list of documents
+def test_list_documents_returns_200(client):
+    from app.api.routes.documents import list_documents  # noqa: F401
+
+    with patch("app.api.routes.documents.list_documents", return_value=[
+        {"document_id": "doc-1", "filename": "a.pdf", "sha256": "aaa",
+         "chunk_count": 10, "pages": 5},
+    ]):
+        response = client.get("/documents")
+    assert response.status_code == 200
+    assert "documents" in response.json()
+
+
+# AC-LIST-02 — Each document entry includes all required fields
+def test_list_documents_includes_all_fields(client):
+    from app.api.routes.documents import list_documents  # noqa: F401
+
+    with patch("app.api.routes.documents.list_documents", return_value=[
+        {"document_id": "doc-1", "filename": "budget.pdf", "sha256": "abc",
+         "chunk_count": 90, "pages": 23},
+    ]):
+        response = client.get("/documents")
+    doc = response.json()["documents"][0]
+    assert "document_id" in doc
+    assert "filename" in doc
+    assert "sha256" in doc
+    assert "chunk_count" in doc
+    assert "pages" in doc
+
+
+# AC-LIST-03 — GET /documents returns total: 0 and empty list when empty
+def test_list_documents_empty_collection(client):
+    from app.api.routes.documents import list_documents  # noqa: F401
+
+    with patch("app.api.routes.documents.list_documents", return_value=[]):
+        response = client.get("/documents")
+    body = response.json()
+    assert body["documents"] == []
+    assert body["total"] == 0
+
+
+# AC-LIST-04 — After ingesting two documents, total is 2
+def test_list_documents_multiple_documents(client):
+    from app.api.routes.documents import list_documents  # noqa: F401
+
+    with patch("app.api.routes.documents.list_documents", return_value=[
+        {"document_id": "doc-1", "filename": "a.pdf", "sha256": "aaa",
+         "chunk_count": 10, "pages": 5},
+        {"document_id": "doc-2", "filename": "b.pdf", "sha256": "bbb",
+         "chunk_count": 20, "pages": 8},
+    ]):
+        response = client.get("/documents")
+    assert response.json()["total"] == 2
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Phase 3 — Document deletion tests (AC-DEL)
+# ══════════════════════════════════════════════════════════════════════════════
+
+# AC-DEL-01 — DELETE /documents/{id} returns HTTP 200 for a known document
+def test_delete_document_returns_200(client):
+    from app.api.routes.documents import find_document_by_id  # noqa: F401
+
+    with patch("app.api.routes.documents.find_document_by_id", return_value=True), \
+         patch("app.api.routes.documents.delete_by_document_id"):
+        response = client.delete("/documents/doc-1")
+    assert response.status_code == 200
+    assert response.json()["document_id"] == "doc-1"
+
+
+# AC-DEL-02 — After deletion, GET /documents no longer includes that document
+def test_delete_document_removed_from_list(client):
+    from app.api.routes.documents import find_document_by_id  # noqa: F401
+
+    with patch("app.api.routes.documents.find_document_by_id", return_value=True), \
+         patch("app.api.routes.documents.delete_by_document_id"):
+        client.delete("/documents/doc-1")
+
+    with patch("app.api.routes.documents.list_documents", return_value=[]):
+        response = client.get("/documents")
+    assert response.json()["total"] == 0
+
+
+# AC-DEL-03 — DELETE /documents/{id} returns HTTP 404 for an unknown id
+def test_delete_unknown_document_returns_404(client):
+    from app.api.routes.documents import find_document_by_id  # noqa: F401
+
+    with patch("app.api.routes.documents.find_document_by_id", return_value=False):
+        response = client.delete("/documents/nonexistent")
+    assert response.status_code == 404
+    assert response.json()["error"] == "DOCUMENT_NOT_FOUND"
+
+
+# AC-DEL-04 — After deletion, querying with document_id filter returns found: false
+def test_delete_then_query_returns_not_found(client):
+    from app.api.routes.documents import find_document_by_id  # noqa: F401
+
+    # Delete the document
+    with patch("app.api.routes.documents.find_document_by_id", return_value=True), \
+         patch("app.api.routes.documents.delete_by_document_id"):
+        client.delete("/documents/doc-1")
+
+    # Query against it — should get found=false
+    with patch("app.api.routes.query.embed_query", return_value=[0.1] * 768), \
+         patch("app.api.routes.query.hybrid_search", return_value=[]), \
+         patch("app.api.routes.query.is_not_found", return_value=True), \
+         patch("app.api.routes.query.build_not_found_answer", return_value="Not found."):
+        response = client.post("/query", json={
+            "question": "What is in this document?",
+            "filters": {"document_id": "doc-1"},
+        })
+    assert response.json()["found"] is False
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Phase 3 — Answer quality tests (AC-QUAL-01)
+# ══════════════════════════════════════════════════════════════════════════════
+
+# AC-QUAL-01 — QueryResponse includes a confidence field
+def test_query_response_includes_confidence(client):
+    from app.qa.context import compute_confidence  # noqa: F401
+
+    with patch("app.api.routes.query.embed_query", return_value=[0.1] * 768), \
+         patch("app.api.routes.query.hybrid_search") as mock_search, \
+         patch("app.api.routes.query.answer") as mock_answer, \
+         patch("app.api.routes.query.is_not_found", return_value=False):
+        mock_search.return_value = [_make_mock_source_chunk(score=0.03)]
+        mock_answer.return_value = {"answer": "The answer.", "sources": [_make_mock_source_chunk(score=0.03)]}
+        response = client.post("/query", json={"question": "What is the budget?"})
+    body = response.json()
+    assert "confidence" in body
+    assert body["confidence"] in ("high", "medium", "low")

@@ -298,3 +298,109 @@ def test_hybrid_search_falls_back_to_dense_only():
     results = hybrid_search([0.1] * 768, "budget", client, settings, top_k=5)
     assert len(results) >= 1
     assert results[0].chunk_id == "dense-only"
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Phase 3 tests — list_documents, find_document_by_id
+# ══════════════════════════════════════════════════════════════════════════════
+
+def _make_mock_point(document_id="doc-1", filename="budget.pdf",
+                     sha256="abc123", page_number=3):
+    """Create a MagicMock point matching Qdrant scroll output."""
+    point = MagicMock()
+    point.payload = {
+        "document_id": document_id,
+        "filename": filename,
+        "sha256": sha256,
+        "page_number": page_number,
+    }
+    return point
+
+
+# ── list_documents ───────────────────────────────────────────────────────────
+
+def test_list_documents_returns_metadata():
+    from app.retrieval.vector_store import list_documents
+
+    client = MagicMock()
+    points = [
+        _make_mock_point(document_id="doc-1", filename="a.pdf", sha256="aaa", page_number=5),
+        _make_mock_point(document_id="doc-1", filename="a.pdf", sha256="aaa", page_number=3),
+    ]
+    client.scroll.return_value = (points, None)
+    settings = _make_settings()
+
+    docs = list_documents(client, settings)
+    assert len(docs) == 1
+    doc = docs[0]
+    assert doc["document_id"] == "doc-1"
+    assert doc["filename"] == "a.pdf"
+    assert doc["sha256"] == "aaa"
+    assert doc["chunk_count"] == 2
+    assert doc["pages"] == 5
+
+
+def test_list_documents_empty_collection():
+    from app.retrieval.vector_store import list_documents
+
+    client = MagicMock()
+    client.scroll.return_value = ([], None)
+    settings = _make_settings()
+
+    docs = list_documents(client, settings)
+    assert docs == []
+
+
+def test_list_documents_deduplicates():
+    from app.retrieval.vector_store import list_documents
+
+    client = MagicMock()
+    points = [
+        _make_mock_point(document_id="doc-1", filename="a.pdf"),
+        _make_mock_point(document_id="doc-2", filename="b.pdf"),
+        _make_mock_point(document_id="doc-1", filename="a.pdf"),
+    ]
+    client.scroll.return_value = (points, None)
+    settings = _make_settings()
+
+    docs = list_documents(client, settings)
+    assert len(docs) == 2
+    doc_ids = {d["document_id"] for d in docs}
+    assert doc_ids == {"doc-1", "doc-2"}
+
+
+def test_list_documents_pagination():
+    from app.retrieval.vector_store import list_documents
+
+    client = MagicMock()
+    page1 = [_make_mock_point(document_id="doc-1")]
+    page2 = [_make_mock_point(document_id="doc-2")]
+    # First call returns page1 with a next_offset; second returns page2 with None
+    client.scroll.side_effect = [(page1, "offset-abc"), (page2, None)]
+    settings = _make_settings()
+
+    docs = list_documents(client, settings)
+    assert len(docs) == 2
+    assert client.scroll.call_count == 2
+
+
+# ── find_document_by_id ──────────────────────────────────────────────────────
+
+def test_find_document_by_id_found():
+    from app.retrieval.vector_store import find_document_by_id
+
+    client = MagicMock()
+    client.scroll.return_value = ([_make_mock_point()], None)
+    settings = _make_settings()
+
+    assert find_document_by_id("doc-1", client, settings) is True
+
+
+def test_find_document_by_id_not_found():
+    from app.retrieval.vector_store import find_document_by_id
+
+    client = MagicMock()
+    client.scroll.return_value = ([], None)
+    settings = _make_settings()
+
+    assert find_document_by_id("nonexistent", client, settings) is False

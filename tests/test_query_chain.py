@@ -93,3 +93,54 @@ def test_answer_raises_generation_error(mock_get_llm):
 
     with pytest.raises(GenerationError):
         answer("Question?", [_make_chunk()], [], _make_settings())
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Phase 3 — Highlight extraction tests (AC-QUAL-05, AC-QUAL-06, AC-QUAL-07)
+# ══════════════════════════════════════════════════════════════════════════════
+
+# AC-QUAL-05 — SourceChunk includes a highlight field
+@patch("app.qa.chain._get_llm")
+def test_source_chunk_has_highlight_field(mock_get_llm):
+    from app.qa.chain import answer
+
+    mock_llm = MagicMock()
+    mock_llm.invoke.return_value = MagicMock(
+        content="The answer is here.\nHIGHLIGHT[1]: The key sentence from source one."
+    )
+    mock_get_llm.return_value = mock_llm
+
+    chunks = [_make_chunk("Source one text.")]
+    result = answer("Question?", chunks, [], _make_settings())
+    assert result["sources"][0].highlight == "The key sentence from source one."
+
+
+# AC-QUAL-06 — highlight is None when the LLM returns no highlight marker
+@patch("app.qa.chain._get_llm")
+def test_highlight_is_none_when_no_marker(mock_get_llm):
+    from app.qa.chain import answer
+
+    mock_llm = MagicMock()
+    mock_llm.invoke.return_value = MagicMock(content="Just a plain answer.")
+    mock_get_llm.return_value = mock_llm
+
+    chunks = [_make_chunk("Source text.")]
+    result = answer("Question?", chunks, [], _make_settings())
+    assert result["sources"][0].highlight is None
+
+
+# AC-QUAL-07 — The visible answer text does not contain raw HIGHLIGHT[N]: markers
+@patch("app.qa.chain._get_llm")
+def test_answer_text_has_no_highlight_markers(mock_get_llm):
+    from app.qa.chain import answer
+
+    mock_llm = MagicMock()
+    mock_llm.invoke.return_value = MagicMock(
+        content="The budget is 12B vatu.\nHIGHLIGHT[1]: Budget is 12B vatu.\nHIGHLIGHT[2]: Revenue was 10B."
+    )
+    mock_get_llm.return_value = mock_llm
+
+    chunks = [_make_chunk("First."), _make_chunk("Second.")]
+    result = answer("Question?", chunks, [], _make_settings())
+    assert "HIGHLIGHT[" not in result["answer"]
+    assert "The budget is 12B vatu." in result["answer"]

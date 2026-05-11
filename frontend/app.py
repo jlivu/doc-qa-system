@@ -53,6 +53,12 @@ if "last_response" not in st.session_state:
     st.session_state.last_response = None
 if "needs_refresh" not in st.session_state:
     st.session_state.needs_refresh = True
+if "confirm_delete_id" not in st.session_state:
+    st.session_state.confirm_delete_id = None
+if "confirm_delete_name" not in st.session_state:
+    st.session_state.confirm_delete_name = None
+if "confirm_clear_conversation" not in st.session_state:
+    st.session_state.confirm_clear_conversation = False
 
 # Refresh document list on first load or after ingest/delete
 if st.session_state.needs_refresh:
@@ -99,15 +105,32 @@ with st.sidebar:
             cols[1].write(f"{doc['pages']}p")
             cols[2].write(f"{doc['chunk_count']}c")
             if cols[3].button("🗑", key=f"del-{doc['document_id']}"):
+                st.session_state.confirm_delete_id = doc["document_id"]
+                st.session_state.confirm_delete_name = doc["filename"]
+
+        # Delete confirmation dialog
+        if st.session_state.confirm_delete_id is not None:
+            st.warning(
+                f"Are you sure you want to delete **{st.session_state.confirm_delete_name}**? "
+                "This cannot be undone."
+            )
+            confirm_cols = st.columns(2)
+            if confirm_cols[0].button("Confirm", key="confirm-delete-yes"):
                 try:
-                    resp = api_delete(f"/documents/{doc['document_id']}")
+                    resp = api_delete(f"/documents/{st.session_state.confirm_delete_id}")
                     if resp.status_code == 200:
                         refresh_documents()
-                        st.rerun()
                     else:
                         st.error("Delete failed")
                 except requests.RequestException as e:
                     st.error(f"Cannot reach the API: {e}")
+                st.session_state.confirm_delete_id = None
+                st.session_state.confirm_delete_name = None
+                st.rerun()
+            if confirm_cols[1].button("Cancel", key="confirm-delete-no"):
+                st.session_state.confirm_delete_id = None
+                st.session_state.confirm_delete_name = None
+                st.rerun()
     else:
         st.caption("No documents ingested yet.")
 
@@ -124,9 +147,20 @@ with st.sidebar:
             st.caption(f"A: {history[i + 1]['content'][:100]}...")
 
     if st.button("Clear conversation"):
-        st.session_state.conversation_history = []
-        st.session_state.last_response = None
-        st.rerun()
+        st.session_state.confirm_clear_conversation = True
+
+    # Clear conversation confirmation dialog
+    if st.session_state.confirm_clear_conversation:
+        st.warning("Clear the entire conversation history?")
+        clear_cols = st.columns(2)
+        if clear_cols[0].button("Confirm", key="confirm-clear-yes"):
+            st.session_state.conversation_history = []
+            st.session_state.last_response = None
+            st.session_state.confirm_clear_conversation = False
+            st.rerun()
+        if clear_cols[1].button("Cancel", key="confirm-clear-no"):
+            st.session_state.confirm_clear_conversation = False
+            st.rerun()
 
 
 # ── Main — Query interface ───────────────────────────────────────────────────

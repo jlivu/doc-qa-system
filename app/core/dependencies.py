@@ -18,8 +18,8 @@ def get_qdrant_client() -> QdrantClient:
 
 
 def get_reranker(request: Request):
-    """Return the reranker model loaded at startup."""
-    return request.app.state.reranker
+    """Return the reranker model loaded at startup, or None if unavailable."""
+    return getattr(request.app.state, "reranker", None)
 
 
 # Convenience type aliases for use in route signatures

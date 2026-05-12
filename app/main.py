@@ -1,6 +1,9 @@
+import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+
+logger = logging.getLogger(__name__)
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.routes import ingest, query, documents, jobs
@@ -18,8 +21,9 @@ async def lifespan(app: FastAPI):
     try:
         from app.retrieval.reranker import load_reranker
         app.state.reranker = load_reranker(settings.reranker_model)
-    except Exception:
-        app.state.reranker = None  # Tests will override via DI
+    except Exception as exc:
+        logger.warning("Reranker failed to load: %s. Queries will run without reranking.", exc)
+        app.state.reranker = None
 
     # Verify Qdrant
     try:

@@ -9,6 +9,7 @@ services:
       - .env
     environment:
       - OLLAMA_BASE_URL=http://host.docker.internal:11434
+      - HOME=/tmp
     volumes:
       - ./sample_docs:/app/sample_docs:ro
       - uploads:/app/uploads

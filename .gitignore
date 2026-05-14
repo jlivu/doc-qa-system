@@ -47,3 +47,4 @@ uploads/
 # Evaluation results (generated, not source)
 eval/results/
 !eval/results/.gitkeep
+sample_docs/*.pdf

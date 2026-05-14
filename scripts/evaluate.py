@@ -75,22 +75,54 @@ def main():
     dataset = load_dataset(args.dataset)
     print(f"Loaded {len(dataset)} questions from {args.dataset}")
 
+    # Pre-flight: verify all required documents are ingested
+    required_filenames = {
+        item["document_filename"] for item in dataset
+        if item.get("document_filename")
+    }
+    try:
+        resp = requests.get(f"{args.api_url}/documents", timeout=30)
+        resp.raise_for_status()
+        ingested_filenames = {d["filename"] for d in resp.json().get("documents", [])}
+    except Exception as exc:
+        print(f"ERROR: Could not reach the API at {args.api_url}/documents: {exc}")
+        sys.exit(2)
+
+    missing = required_filenames - ingested_filenames
+    if missing:
+        print("ERROR: The following documents from the golden dataset are not ingested:")
+        for name in sorted(missing):
+            print(f"  - {name}")
+        print("\nIngest the missing documents before running evaluation.")
+        sys.exit(2)
+    print(f"Pre-flight OK: all {len(required_filenames)} required documents are ingested.")
+
     results = []
     for item in dataset:
-        doc_filter = item["document_filename"] if item["expected_found"] else None
+        doc_filter = item.get("document_filename") if item["expected_found"] else None
         start = time.time()
         try:
             result = run_query(args.api_url, item["question"], doc_filter)
             latency = time.time() - start
+
+            sources = result.get("sources") or []
+            found = result.get("found", False)
+            answer_text = result.get("answer", "")
+            retrieved_pages = [s["page"] for s in sources]
+            top_score = sources[0]["score"] if sources else None
+
             results.append({
                 **item,
-                "actual_answer": result.get("answer", ""),
-                "actual_found": result.get("found", False),
-                "actual_sources": result.get("sources", []),
+                "actual_answer": answer_text,
+                "actual_found": found,
+                "actual_sources": sources,
+                "retrieved_pages": retrieved_pages,
+                "top_score": top_score,
                 "confidence": result.get("confidence", "low"),
                 "latency": round(latency, 2),
                 "error": None,
             })
+            print(f"  [{item['id']}] found={found} top_score={top_score} pages={retrieved_pages[:5]} ({latency:.1f}s)")
         except Exception as exc:
             latency = time.time() - start
             results.append({
@@ -98,11 +130,13 @@ def main():
                 "actual_answer": "",
                 "actual_found": False,
                 "actual_sources": [],
+                "retrieved_pages": [],
+                "top_score": None,
                 "confidence": "low",
                 "latency": round(latency, 2),
                 "error": str(exc),
             })
-        print(f"  [{item['id']}] {item['question'][:60]}... ({latency:.1f}s)")
+            print(f"  [{item['id']}] ERROR: {exc} ({latency:.1f}s)")
 
     # Compute metrics
     answerable = [r for r in results if r["expected_found"]]
@@ -111,8 +145,9 @@ def main():
     # Retrieval recall@5
     recall_hits = 0
     for r in answerable:
-        source_pages = {s["page"] for s in r["actual_sources"][:5]}
-        if any(p in source_pages for p in r["expected_source_pages"]):
+        top5_pages = set(r["retrieved_pages"][:5])
+        expected = set(r["expected_source_pages"])
+        if top5_pages & expected:  # any overlap
             recall_hits += 1
     recall = recall_hits / len(answerable) if answerable else 0.0
 
@@ -126,8 +161,11 @@ def main():
                 similarities.append(cosine_similarity(emb_ref, emb_act))
     avg_similarity = sum(similarities) / len(similarities) if similarities else 0.0
 
-    # Not-found accuracy
-    not_found_correct = sum(1 for r in unanswerable if not r["actual_found"])
+    # Not-found accuracy — unanswerable questions should have found==False
+    not_found_correct = sum(
+        1 for r in unanswerable
+        if r["expected_found"] is False and r["actual_found"] is False
+    )
     not_found_accuracy = not_found_correct / len(unanswerable) if unanswerable else 0.0
 
     # Targets
@@ -184,6 +222,9 @@ def main():
             f.write(f"### [{r['id']}] {r['question']}\n\n")
             f.write(f"- **Expected found:** {r['expected_found']}\n")
             f.write(f"- **Actual found:** {r['actual_found']}\n")
+            f.write(f"- **Top score:** {r['top_score']}\n")
+            f.write(f"- **Retrieved pages:** {r['retrieved_pages'][:5]}\n")
+            f.write(f"- **Expected pages:** {r['expected_source_pages']}\n")
             f.write(f"- **Confidence:** {r['confidence']}\n")
             f.write(f"- **Latency:** {r['latency']}s\n")
             if r["reference_answer"]:

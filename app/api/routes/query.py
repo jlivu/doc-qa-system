@@ -71,9 +71,28 @@ async def query_documents(
             filename=payload.filters.filename if payload.filters else None,
         )
 
-        # 4. Not-found check
-        if is_not_found(source_chunks):
-            answer_text = build_not_found_answer(source_chunks)
+        # 4. Convert SearchResult → SourceChunk
+        chunks_as_source = [
+            s if isinstance(s, SourceChunk) else SourceChunk(
+                document_id=s.document_id,
+                filename=s.filename,
+                page=s.page_number if isinstance(s, SearchResult) else s.page,
+                text=s.text,
+                score=round(s.score, 4),
+            )
+            for s in source_chunks
+        ]
+
+        # 5. Rerank (replaces RRF scores with cross-encoder scores)
+        if reranker is not None:
+            chunks_as_source = rerank(
+                payload.question, chunks_as_source,
+                settings.reranker_top_k, reranker,
+            )
+
+        # 6. Not-found check (now sees cross-encoder scores, not RRF)
+        if is_not_found(chunks_as_source):
+            answer_text = build_not_found_answer(chunks_as_source)
             updated_history = list(history) + [
                 ConversationTurn(role="user", content=payload.question),
                 ConversationTurn(role="assistant", content=answer_text),
@@ -86,29 +105,10 @@ async def query_documents(
                 conversation_history=updated_history,
             )
 
-        # 5. Convert SearchResult → SourceChunk
-        chunks_as_source = [
-            s if isinstance(s, SourceChunk) else SourceChunk(
-                document_id=s.document_id,
-                filename=s.filename,
-                page=s.page_number if isinstance(s, SearchResult) else s.page,
-                text=s.text,
-                score=round(s.score, 4),
-            )
-            for s in source_chunks
-        ]
-
-        # 5b. Rerank
-        if reranker is not None:
-            chunks_as_source = rerank(
-                payload.question, chunks_as_source,
-                settings.reranker_top_k, reranker,
-            )
-
-        # 6. Generate answer
+        # 7. Generate answer
         result = answer(payload.question, chunks_as_source, history, settings)
 
-        # 7. Normalise sources to SourceChunk
+        # 8. Normalise sources to SourceChunk
         sources = [
             s if isinstance(s, SourceChunk) else SourceChunk(
                 document_id=s.document_id,
@@ -120,12 +120,12 @@ async def query_documents(
             for s in result["sources"]
         ]
 
-        # 8. Guard against empty answer
+        # 9. Guard against empty answer
         answer_text = result["answer"]
         if not answer_text or not answer_text.strip():
             answer_text = "I was unable to generate an answer. Please try rephrasing your question."
 
-        # 9. Build updated history
+        # 10. Build updated history
         updated_history = list(history) + [
             ConversationTurn(role="user", content=payload.question),
             ConversationTurn(role="assistant", content=answer_text),

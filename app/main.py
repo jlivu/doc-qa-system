@@ -9,7 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.api.routes import ingest, query, documents, jobs
 from app.api.schemas import HealthResponse
 from app.core.config import get_settings
-from app.core.dependencies import get_qdrant_client
+from app.core.dependencies import get_qdrant_client, set_reranker
 
 settings = get_settings()
 
@@ -20,10 +20,12 @@ async def lifespan(app: FastAPI):
     # Load reranker singleton
     try:
         from app.retrieval.reranker import load_reranker
-        app.state.reranker = load_reranker(settings.reranker_model)
+        model = load_reranker(settings.reranker_model)
+        set_reranker(model)
+        logger.info("Reranker loaded: %s", settings.reranker_model)
     except Exception as exc:
         logger.warning("Reranker failed to load: %s. Queries will run without reranking.", exc)
-        app.state.reranker = None
+        set_reranker(None)
 
     # Verify Qdrant
     try:

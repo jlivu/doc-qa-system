@@ -13,13 +13,14 @@ def build_context(chunks: list[SourceChunk]) -> str:
     return "\n\n---\n\n".join(parts)
 
 
-def is_not_found(chunks: list[SourceChunk], threshold: float = -5.0) -> bool:
+def is_not_found(chunks: list[SourceChunk], threshold: float = -3.0) -> bool:
     """Return True if no relevant chunks were found.
 
     After Phase 4 reranking, scores are cross-encoder logits (typically
-    -10 to +10). A score below -5.0 means the retrieved chunks are
-    genuinely irrelevant. The *threshold* parameter is kept for backward
-    compatibility with tests that pass it explicitly.
+    -10 to +10). A threshold of -3.0 gives room for genuinely relevant
+    chunks while still rejecting truly irrelevant ones.
+    The *threshold* parameter is kept for backward compatibility with
+    tests that pass it explicitly.
     """
     if not chunks:
         return True
